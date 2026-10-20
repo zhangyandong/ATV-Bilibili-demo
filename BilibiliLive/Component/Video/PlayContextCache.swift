@@ -66,7 +66,9 @@ actor PlayContextCache {
     }
 
     func context(for playInfo: PlayInfo, mode: PlayContextMode) async throws -> PlayContextSnapshot {
+        try Task.checkCancellation()
         let resolvedPlayInfo = try await PlayInfoResolver.resolve(playInfo)
+        try Task.checkCancellation()
         let entryKey = PlayContextEntryKey(contextKey: resolvedPlayInfo.contextKey, mode: mode)
 
         if var cached = entries[entryKey] {
@@ -115,6 +117,12 @@ actor PlayContextCache {
         let entry = InFlightEntry(token: token, task: task)
         inFlightTasks[entryKey] = entry
         return try await resolve(entry, for: entryKey)
+    }
+
+    func cancelPendingPreviews() {
+        for key in inFlightTasks.keys.filter({ $0.mode == .preview }) {
+            inFlightTasks.removeValue(forKey: key)?.task.cancel()
+        }
     }
 
     func trim(keeping playInfos: [PlayInfo]) {

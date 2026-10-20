@@ -168,8 +168,6 @@ class TabBarCustomizationViewController: UIViewController {
             }
             minePlacements.remove(at: from.item)
             tabbarPlacements.insert(editItem, at: to.item)
-            print(minePlacements)
-            print(tabbarPlacements)
         case .personal:
             if editItem.page.isFixedInTabBar {
                 let alert = UIAlertController(title: "该项目只允许在导航栏展示", message: nil, preferredStyle: .alert)

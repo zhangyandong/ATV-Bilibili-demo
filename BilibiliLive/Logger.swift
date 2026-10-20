@@ -11,7 +11,12 @@ import Foundation
 class Logger {
     private static let fileLogger = DDFileLogger()
     static func setup() {
-        DDLog.add(DDOSLogger.sharedInstance)
+        #if DEBUG
+            let level: DDLogLevel = .all
+        #else
+            let level: DDLogLevel = .warning
+        #endif
+        DDLog.add(DDOSLogger.sharedInstance, with: level)
         let dataFormatter = DateFormatter()
         dataFormatter.setLocalizedDateFormatFromTemplate("YYYY/MM/dd HH:mm:ss:SSS")
         fileLogger.logFormatter = DDLogFileFormatterDefault(dateFormatter: dataFormatter)
@@ -19,7 +24,7 @@ class Logger {
         fileLogger.logFileManager.maximumNumberOfLogFiles = 2
         fileLogger.doNotReuseLogFiles = true
         fileLogger.maximumFileSize = 1024 * 1024 * 5
-        DDLog.add(fileLogger)
+        DDLog.add(fileLogger, with: level)
     }
 
     static func debug(_ message: @autoclosure () -> DDLogMessageFormat,
@@ -27,7 +32,9 @@ class Logger {
                       function: StaticString = #function,
                       line: UInt = #line)
     {
-        DDLogDebug(message(), file: file, function: function, line: line)
+        #if DEBUG
+            DDLogDebug(message(), file: file, function: function, line: line)
+        #endif
     }
 
     static func info(_ message: @autoclosure () -> DDLogMessageFormat,
@@ -35,7 +42,9 @@ class Logger {
                      function: StaticString = #function,
                      line: UInt = #line)
     {
-        DDLogInfo(message(), file: file, function: function, line: line)
+        #if DEBUG
+            DDLogInfo(message(), file: file, function: function, line: line)
+        #endif
     }
 
     static func warn(_ message: @autoclosure () -> DDLogMessageFormat,

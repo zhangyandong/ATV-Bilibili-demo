@@ -326,9 +326,6 @@ struct DynamicFeedData: Codable, PlayableData, DisplayData {
             if let play = stat.play {
                 leftItems.append(DisplayOverlay.DisplayOverlayItem(icon: "play.rectangle", text: play == "0" ? "-" : "\(play)"))
             }
-            if let danmaku = stat.danmaku {
-                leftItems.append(DisplayOverlay.DisplayOverlayItem(icon: "list.bullet.rectangle", text: danmaku == "0" ? "-" : "\(danmaku)"))
-            }
         }
         if let durationText = modules.module_dynamic.major?.archive?.duration_text {
             rightItems.append(DisplayOverlay.DisplayOverlayItem(icon: nil, text: durationText))
@@ -345,7 +342,6 @@ struct DynamicFeedData: Codable, PlayableData, DisplayData {
                                 avatarURL: avatar,
                                 durationText: modules.module_dynamic.major?.archive?.duration_text ?? "",
                                 viewCountText: modules.module_dynamic.major?.archive?.stat?.play ?? "",
-                                danmakuCountText: modules.module_dynamic.major?.archive?.stat?.danmaku ?? "",
                                 reasonText: date)
         }
 
@@ -364,14 +360,8 @@ struct DynamicFeedData: Codable, PlayableData, DisplayData {
     }
 
     let type: String
-    let basic: Basic
     let modules: Modules
     let id_str: String
-
-    struct Basic: Codable, Hashable {
-        let comment_id_str: String
-        let comment_type: Int
-    }
 
     struct Modules: Codable, Hashable {
         let module_author: ModuleAuthor
@@ -400,7 +390,6 @@ struct DynamicFeedData: Codable, PlayableData, DisplayData {
                     let stat: Stat?
 
                     struct Stat: Codable, Hashable {
-                        let danmaku: String?
                         let play: String?
                     }
                 }

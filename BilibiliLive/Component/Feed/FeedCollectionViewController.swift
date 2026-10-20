@@ -266,12 +266,17 @@ extension FeedCollectionViewController: UICollectionViewDelegate {
     }
 
     func collectionView(_ collectionView: UICollectionView, willDisplay cell: UICollectionViewCell, forItemAt indexPath: IndexPath) {
+        (cell as? FeedCollectionViewCell)?.resumeImageLoading()
         guard _displayData.count > 0 else { return }
         guard indexPath.row == _displayData.count - 1, !isLoading, !finished else {
             return
         }
         isLoading = true
         loadMore?()
+    }
+
+    func collectionView(_ collectionView: UICollectionView, didEndDisplaying cell: UICollectionViewCell, forItemAt indexPath: IndexPath) {
+        (cell as? FeedCollectionViewCell)?.cancelImageLoading()
     }
 
     func scrollViewWillBeginDecelerating(_ scrollView: UIScrollView) {

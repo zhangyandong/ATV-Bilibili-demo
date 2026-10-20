@@ -45,6 +45,8 @@ final class VideoPlayerInfoTabsPlugin: NSObject, CommonPlayerPlugin {
     private let ownerMid: Int
     private var uploaderEntries = [PlayInfo]()
     private var uploaderLoadTask: Task<Void, Never>?
+    private var uploaderLoaded = false
+    private var uploaderLoadID: UUID?
     private weak var playerVC: AVPlayerViewController?
 
     init(detail: VideoDetail?, currentPlayInfo: PlayInfo, sequenceProvider: VideoSequenceProvider?) {
@@ -67,8 +69,10 @@ final class VideoPlayerInfoTabsPlugin: NSObject, CommonPlayerPlugin {
         }
         uploaderInfoViewController.onSelect = onSelect
         relatedInfoViewController.onSelect = onSelect
+        uploaderInfoViewController.onAppear = { [weak self] in
+            self?.loadUploaderEntriesIfNeeded()
+        }
         refreshDiscoveryTabs()
-        loadUploaderEntriesIfNeeded()
     }
 
     deinit {
@@ -82,50 +86,40 @@ final class VideoPlayerInfoTabsPlugin: NSObject, CommonPlayerPlugin {
 
     func playerDidDismiss(playerVC: AVPlayerViewController) {
         removeCustomInfoViewControllers()
-        uploaderLoadTask?.cancel()
-        uploaderLoadTask = nil
+        cancelUploaderLoad()
     }
 
     func playerWillCleanUp(playerVC: AVPlayerViewController) {
         removeCustomInfoViewControllers()
+        cancelUploaderLoad()
+    }
+
+    private func cancelUploaderLoad() {
+        uploaderLoadID = nil
         uploaderLoadTask?.cancel()
         uploaderLoadTask = nil
     }
 
     private func loadUploaderEntriesIfNeeded() {
-        guard ownerMid > 0 else { return }
-        uploaderLoadTask = Task { [weak self] in
-            guard let self else { return }
+        guard ownerMid > 0, !uploaderLoaded, uploaderLoadTask == nil else { return }
+        let ownerMid = ownerMid
+        let accountMid = AccountManager.shared.activeAccount?.profile.mid ?? 0
+        let loadID = UUID()
+        uploaderLoadID = loadID
+        uploaderInfoViewController.update(entries: [], emptyMessage: "正在加载博主视频…")
+        uploaderLoadTask = Task { @MainActor [weak self] in
             do {
-                let records = try await ApiRequest.requestUpSpaceVideo(mid: self.ownerMid, lastAid: nil, pageSize: 18)
-                guard !Task.isCancelled else { return }
-
-                var seenAids = Set<Int>()
-                let entries = records.compactMap { record -> PlayInfo? in
-                    guard record.aid > 0,
-                          record.aid != self.currentPlayInfo.aid,
-                          seenAids.insert(record.aid).inserted
-                    else {
-                        return nil
-                    }
-                    return PlayInfo(aid: record.aid,
-                                    title: record.title,
-                                    ownerName: record.ownerName,
-                                    coverURL: record.pic)
-                }
-
-                await MainActor.run {
-                    guard !Task.isCancelled else { return }
-                    self.uploaderEntries = Array(entries.prefix(6))
-                    self.refreshDiscoveryTabs()
-                }
+                let videos = try await UploaderVideoCache.shared.videos(ownerMid: ownerMid, accountMid: accountMid)
+                guard !Task.isCancelled, let self, self.uploaderLoadID == loadID else { return }
+                self.uploaderLoadTask = nil
+                self.uploaderLoaded = true
+                self.uploaderEntries = Array(videos.filter { $0.aid != self.currentPlayInfo.aid }.prefix(6))
+                self.refreshDiscoveryTabs()
             } catch {
-                guard !Task.isCancelled else { return }
-                await MainActor.run {
-                    guard !Task.isCancelled else { return }
-                    self.uploaderEntries = []
-                    self.refreshDiscoveryTabs()
-                }
+                guard !Task.isCancelled, let self, self.uploaderLoadID == loadID else { return }
+                self.uploaderLoadTask = nil
+                self.uploaderInfoViewController.update(entries: [], emptyMessage: "加载失败，重新打开此面板可重试")
+                Logger.warn(error)
             }
         }
     }

@@ -168,7 +168,7 @@ extension SearchResultViewController {
         let userCell = UICollectionView.CellRegistration<UpCell, SearchResult.User> {
             $0.nameLabel.text = $2.uname
             $0.despLabel.text = $2.usign
-            $0.imageView.kf.setImage(with: $2.upic.addSchemeIfNeed(), options: [.processor(DownsamplingImageProcessor(size: CGSize(width: 80, height: 80))), .processor(RoundCornerImageProcessor(radius: .widthFraction(0.5))), .cacheSerializer(FormatIndicatedCacheSerializer.png)])
+            $0.imageView.configure(url: $2.upic.addSchemeIfNeed(), size: CGSize(width: 80, height: 80), roundCorners: true)
         }
         dataSource = UICollectionViewDiffableDataSource<SearchList, Item>(collectionView: collectionView) {
             collectionView, indexPath, item in
@@ -348,7 +348,6 @@ struct SearchResult: Decodable, Hashable {
         let upic: String
         let aid: Int
         let pubdate: Int
-        let danmaku: Int
         let play: Int?
         let duration: String?
 
@@ -362,7 +361,6 @@ struct SearchResult: Decodable, Hashable {
             var leftItems = [DisplayOverlay.DisplayOverlayItem]()
             var rightItems = [DisplayOverlay.DisplayOverlayItem]()
             leftItems.append(DisplayOverlay.DisplayOverlayItem(icon: "play.rectangle", text: play == 0 ? "-" : play?.numberString() ?? "-"))
-            leftItems.append(DisplayOverlay.DisplayOverlayItem(icon: "list.bullet.rectangle", text: danmaku == 0 ? "-" : danmaku.numberString()))
             if let duration {
                 rightItems.append(DisplayOverlay.DisplayOverlayItem(icon: nil, text: duration))
             }

@@ -53,7 +53,9 @@ class ToViewViewController: StandardVideoCollectionViewController<ToViewData> {
         guard let csrf = CookieHandler.shared.csrf() else { return }
         AF.request("https://api.bilibili.com/x/v2/history/toview/del", method: .post, parameters: ["aid": aid, "csrf": csrf]).responseData {
             [weak self] resp in
-            print(resp.result)
+            if case let .failure(error) = resp.result {
+                Logger.warn(error)
+            }
             self?.reloadData()
         }
     }
@@ -87,7 +89,6 @@ struct ToViewData: PlayableData, Codable {
 
     struct Stat: Codable, Hashable {
         let view: Int
-        let danmaku: Int
     }
 
     var ownerName: String {
@@ -110,7 +111,6 @@ struct ToViewData: PlayableData, Codable {
         var rightItems = [DisplayOverlay.DisplayOverlayItem]()
         if let stat {
             leftItems.append(DisplayOverlay.DisplayOverlayItem(icon: "play.rectangle", text: stat.view == 0 ? "-" : stat.view.numberString()))
-            leftItems.append(DisplayOverlay.DisplayOverlayItem(icon: "list.bullet.rectangle", text: stat.danmaku == 0 ? "-" : stat.danmaku.numberString()))
         }
         rightItems.append(DisplayOverlay.DisplayOverlayItem(icon: nil, text: durationString))
         return DisplayOverlay(leftItems: leftItems, rightItems: rightItems)

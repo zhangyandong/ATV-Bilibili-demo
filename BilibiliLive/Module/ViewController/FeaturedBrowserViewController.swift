@@ -26,7 +26,6 @@ private extension ApiRequest.FeedResp.Items {
                             avatarURL: avatar,
                             durationText: cover_right_text ?? TimeInterval(durationValue).timeString(),
                             viewCountText: cover_left_text_1 ?? "",
-                            danmakuCountText: cover_left_text_2 ?? "",
                             reasonText: top_rcmd_reason ?? bottom_rcmd_reason)
     }
 }

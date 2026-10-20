@@ -64,7 +64,7 @@ actor PlayerMediaWarmupManager {
         let task: Task<PreparedPlayerMedia, Error>
     }
 
-    private let maxPreparedEntries = 4
+    private let maxPreparedEntries = 2
     private let playContextCache: PlayContextCache
     private var prepared = [String: PreparedPlayerMedia]()
     private var inFlight = [String: InFlightEntry]()

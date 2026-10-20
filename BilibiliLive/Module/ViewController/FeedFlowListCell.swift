@@ -11,7 +11,7 @@ final class FeedFlowListCell: BLMotionCollectionViewCell {
     static let reuseID = String(describing: FeedFlowListCell.self)
 
     private let blurBackgroundView = UIVisualEffectView(effect: UIBlurEffect(style: .dark))
-    private let imageView = UIImageView()
+    private let imageView = ThumbnailImageView()
     private let titleLabel = UILabel()
     private let metaLabel = UILabel()
     private let overlayView = BLOverlayView()
@@ -72,20 +72,13 @@ final class FeedFlowListCell: BLMotionCollectionViewCell {
         metaLabel.text = item.listMetaText
         self.isCurrent = isCurrent
 
-        if let coverURL = item.coverURL {
-            imageView.kf.setImage(with: coverURL)
-        } else {
-            imageView.image = nil
-        }
+        imageView.configure(url: item.coverURL, size: CGSize(width: 340, height: 192))
 
         var leftItems = [DisplayOverlay.DisplayOverlayItem]()
         var rightItems = [DisplayOverlay.DisplayOverlayItem]()
         if !item.viewCountText.isEmpty && !item.viewCountText.contains(":") {
             leftItems.append(DisplayOverlay.DisplayOverlayItem(icon: "play.rectangle",
                                                                text: item.viewCountText.replacingOccurrences(of: "观看", with: "")))
-        } else if !item.danmakuCountText.isEmpty && !item.danmakuCountText.contains(":") {
-            leftItems.append(DisplayOverlay.DisplayOverlayItem(icon: "play.rectangle",
-                                                               text: item.danmakuCountText.replacingOccurrences(of: "观看", with: "")))
         }
         if !item.durationText.isEmpty {
             rightItems.append(DisplayOverlay.DisplayOverlayItem(icon: nil, text: item.durationText))
@@ -107,5 +100,10 @@ final class FeedFlowListCell: BLMotionCollectionViewCell {
         blurBackgroundView.effect = UIBlurEffect(style: isFocused || isCurrent ? .light : .dark)
         titleLabel.textColor = isFocused || isCurrent ? .black : .white
         metaLabel.textColor = isFocused || isCurrent ? UIColor.black.withAlphaComponent(0.75) : UIColor.white.withAlphaComponent(0.78)
+    }
+
+    override func prepareForReuse() {
+        super.prepareForReuse()
+        imageView.configure(url: nil, size: .zero)
     }
 }

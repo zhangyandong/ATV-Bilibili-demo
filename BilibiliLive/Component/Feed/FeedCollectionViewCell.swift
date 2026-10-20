@@ -16,9 +16,9 @@ class FeedCollectionViewCell: BLMotionCollectionViewCell {
 
     private let titleLabel = MarqueeLabel()
     private let upLabel = UILabel()
-    private let imageView = UIImageView()
+    private let imageView = ThumbnailImageView()
     private let infoView = UIView()
-    private let avatarView = UIImageView()
+    private let avatarView = ThumbnailImageView()
     private let overlayView = BLOverlayView()
 
     override func setup() {
@@ -103,18 +103,9 @@ class FeedCollectionViewCell: BLMotionCollectionViewCell {
             overlayView.isHidden = true
         }
         upLabel.text = [data.ownerName, data.date].compactMap({ $0 }).joined(separator: " · ")
-        if var pic = data.pic {
-            if pic.scheme == nil {
-                pic = URL(string: "http:\(pic.absoluteString)")!
-            }
-            imageView.kf.setImage(with: pic, options: [.processor(DownsamplingImageProcessor(size: CGSize(width: 360, height: 202))), .cacheOriginalImage])
-        }
-        if let avatar = data.avatar(size: 240) {
-            avatarView.isHidden = false
-            avatarView.kf.setImage(with: avatar, options: [.processor(DownsamplingImageProcessor(size: CGSize(width: 80, height: 80))), .processor(RoundCornerImageProcessor(radius: .widthFraction(0.5))), .cacheSerializer(FormatIndicatedCacheSerializer.png)])
-        } else {
-            avatarView.isHidden = true
-        }
+        imageView.configure(url: data.pic, size: CGSize(width: 360, height: 202))
+        avatarView.isHidden = data.avatar == nil
+        avatarView.configure(url: data.avatar, size: CGSize(width: 80, height: 80), roundCorners: true)
         updateStyle()
     }
 
@@ -151,8 +142,19 @@ class FeedCollectionViewCell: BLMotionCollectionViewCell {
     override func prepareForReuse() {
         super.prepareForReuse()
         onLongPress = nil
-        avatarView.image = nil
+        imageView.configure(url: nil, size: .zero)
+        avatarView.configure(url: nil, size: .zero)
         stopScroll()
+    }
+
+    func cancelImageLoading() {
+        imageView.cancelLoading()
+        avatarView.cancelLoading()
+    }
+
+    func resumeImageLoading() {
+        imageView.resumeLoading()
+        avatarView.resumeLoading()
     }
 }
 

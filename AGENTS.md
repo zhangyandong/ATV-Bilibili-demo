@@ -22,14 +22,14 @@ The app uses a layered architecture with a factory-based navigation system:
 
 **Module Layer** (`BilibiliLive/Module/`) — Feature-specific view controllers:
 - `Tabbar/` — Root navigation; `BLTabBarViewController` uses `TabBarPageFactory` to create tab VCs dynamically based on user-customizable ordering
-- `Live/` — Live stream playback with `LiveDanMuProvider` for real-time danmaku over WebSocket + Brotli decompression
+- `Live/` — Live stream playback, stream selection, and failure recovery
 - `Personal/` — User account, search, follows, history, settings, tab customization
 - `ViewController/` — Feed, hot, favorites, rankings
 - `DLNA/` — UPnP Digital Media Renderer (`BiliBiliUpnpDMR`) for casting
 
 **Component Layer** (`BilibiliLive/Component/`) — Reusable subsystems:
 - `Player/` — `CommonPlayerViewController` is the base player. `BilibiliVideoResourceLoaderDelegate` implements custom MPEG-DASH resource loading (fetches manifests, parses SIDX segments, rewrites URLs for AVPlayer)
-- `Video/` — `VideoPlayerViewController` + `VideoPlayerViewModel` for regular video; `VideoDanmuProvider` + `VideoDanmuFilter` for video danmaku; `MaskProvider/` for danmaku anti-blocking
+- `Video/` — `VideoPlayerViewController` + `VideoPlayerViewModel` for regular video, video details, playlists, subtitles, and playback controls
 - `Feed/` — `FeedCollectionViewController` / `FeedCollectionViewCell` for content discovery grids
 - `CommonPlayer/` — Local SPM package with shared player utilities
 
@@ -37,23 +37,20 @@ The app uses a layered architecture with a factory-based navigation system:
 - `WebRequest.swift` — Core HTTP layer (Alamofire-based)
 - `WebRequest+WbiSign.swift` — Request signing extension
 - `ApiRequest.swift` — Endpoint definitions, token refresh, MD5 signing, error handling (code `-101` = token expired)
-- `dm.pb.swift` / `dmView.pb.swift` — Protobuf models for danmaku
 - `CookieManager.swift` — Session/cookie persistence
 
 **Account Management:** `AccountManager.swift` handles multi-account state and session tokens.
 
-**Vendor:** `DanmakuKit/` (danmaku rendering engine), `PocketSVG/` (SVG parsing).
+**Vendor:** Shared array-building, delayed-work, and avatar helpers.
 
 ## Key Dependencies (SPM)
 
 - `Alamofire` — HTTP networking
 - `SwiftyJSON` — JSON parsing
-- `SwiftProtobuf` — Danmaku protocol buffers
 - `Kingfisher` — Image caching
 - `SnapKit` — Auto-layout
 - `CocoaLumberjack` / `CocoaLumberjackSwift` — Logging
 - `CocoaAsyncSocket` — TCP/UDP for DLNA
-- `Gzip` — Compression
 - `Swifter` (custom fork) — HTTP server for casting receiver
 
 ## Reusable UI Components (`Component/View/`)
@@ -113,17 +110,23 @@ playerVC.updateMenus()   // rebuilds AVPlayerViewController info panel menus fro
 | Plugin | Purpose |
 |---|---|
 | `URLPlayPlugin` | Sets up AVPlayer from URL with custom HTTP headers; `isLive` flag disables stall recovery |
-| `DanmuViewPlugin` | Renders danmaku via `DanmakuKit`; requires a `DanmuProviderProtocol`; adds menu items for visibility, duration (4/6/8s), AI filter level |
 | `SpeedChangerPlugin` | Playback speed (0.5×–2×) with pitch correction; persists to `Settings.mediaPlayerSpeed` |
 | `SponsorSkipPlugin` | Fetches SponsorBlock segments; two modes: auto-jump (5s preview) or manual tip button |
-| `MaskViewPlugin` | Delivers pixel buffers for danmaku anti-blocking masks via `MaskProvider` |
 | `DebugPlugin` | Overlay with bitrate, stall count, dropped frames; toggled via info panel menu |
 
-**Settings** (`Settings.swift`) — Global user preferences accessed via `@UserDefault` / `@UserDefaultCodable` property wrappers. Observable values (e.g. `Defaults.shared.$showDanmu`) integrate with Combine for reactive UI.
+**Settings** (`Settings.swift`) — Global user preferences accessed via `@UserDefault` / `@UserDefaultCodable` property wrappers.
 
 ## Important Patterns
 
 - **DASH Playback:** `BilibiliVideoResourceLoaderDelegate` intercepts `bilibili://` scheme URLs registered with AVPlayer, fetches real DASH manifests from Bilibili API, and serves segments. This is the core of video playback quality selection.
-- **Danmaku:** Video danmaku uses Protobuf (`dm.pb.swift`); live danmaku uses a custom WebSocket protocol with Brotli-compressed payloads parsed in `LiveDanMuProvider`.
 - **Request Signing:** API calls require both MD5 signing (`ApiRequest`) and WBI signing (`WebRequest+WbiSign`). Unsigned requests will fail with auth errors.
 - **Tab Customization:** Tab order is stored in `UserDefaults` and read by `BLTabBarViewController` via the factory pattern at launch.
+
+## Performance Policies
+
+- `Settings.feedAutoPreviewEnabled` defaults to false and independently controls feed browser previews.
+- Speculative playback loading prepares only the next video; `PlayerMediaWarmupManager` holds at most two prepared entries.
+- Use `ThumbnailImageView` for list images: it combines processors, avoids original-image caching, cancels off-window work, and resumes when visible. `URL.bilibiliThumbnailURL` only resizes unsigned Bilibili CDN images.
+- Uploader discovery loads on panel appearance via `UploaderVideoCache` (5-minute TTL, 8 uploader/account pairs).
+- `Logger.debug` and `Logger.info` do not evaluate their autoclosures in Release. Keep playback health sampling and stall recovery outside DEBUG guards.
+- DLNA routes and observers register once; advertisements refresh every 10 seconds within the 30-second SSDP lifetime.

@@ -29,7 +29,6 @@ private extension WebTopFeedRecommendResponse.Item {
                             avatarURL: avatarURL,
                             durationText: durationValue > 0 ? TimeInterval(durationValue).timeString() : "",
                             viewCountText: (stat?.view ?? 0).numberString(),
-                            danmakuCountText: (stat?.danmaku ?? 0).numberString(),
                             reasonText: reasonContent?.isEmpty == false ? reasonContent : nil,
                             identityKey: FeedFlowItem.makeIdentityKey(aid: aid))
     }

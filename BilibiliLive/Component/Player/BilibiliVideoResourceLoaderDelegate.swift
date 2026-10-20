@@ -527,7 +527,7 @@ class BilibiliVideoResourceLoaderDelegate: NSObject, AVAssetResourceLoaderDelega
             return false
         }
 
-        // 直接在 loader 串行队列处理，避免被主线程（弹幕渲染等）阻塞。
+        // 直接在 loader 串行队列处理，避免被主线程阻塞。
         // playlist 相关状态在 setBilibili 中写入且发生在 setDelegate 之前，此处只读，无竞争。
         handleCustomPlaylistRequest(loadingRequest)
         return true

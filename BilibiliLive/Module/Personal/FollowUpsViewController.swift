@@ -80,7 +80,7 @@ extension FollowUpsViewController: UICollectionViewDataSource {
         let data = follows[indexPath.item]
         cell.nameLabel.text = data.uname
         cell.despLabel.text = data.sign
-        cell.imageView.kf.setImage(with: data.face, options: [.processor(DownsamplingImageProcessor(size: CGSize(width: 80, height: 80))), .processor(RoundCornerImageProcessor(radius: .widthFraction(0.5))), .cacheSerializer(FormatIndicatedCacheSerializer.png)])
+        cell.imageView.configure(url: data.face, size: CGSize(width: 80, height: 80), roundCorners: true)
         return cell
     }
 }
@@ -114,7 +114,7 @@ extension FollowUpsViewController: UICollectionViewDelegate {
 }
 
 class UpCell: BLMotionCollectionViewCell {
-    let imageView = UIImageView()
+    let imageView = ThumbnailImageView()
     let nameLabel = MarqueeLabel()
     let despLabel = UILabel()
 
@@ -159,6 +159,12 @@ class UpCell: BLMotionCollectionViewCell {
         } else {
             stopScroll()
         }
+    }
+
+    override func prepareForReuse() {
+        super.prepareForReuse()
+        imageView.configure(url: nil, size: .zero)
+        stopScroll()
     }
 
     private func startScroll() {

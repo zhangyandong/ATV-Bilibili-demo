@@ -1,5 +1,15 @@
 # BiliBili tvOS 客户端 Demo
 
+本 fork 基于 [yichengchen/ATV-Bilibili-demo](https://github.com/yichengchen/ATV-Bilibili-demo)，已移除视频与直播弹幕、弹幕防挡及评论功能，保留视频播放、直播、字幕和投屏。
+
+本 fork 的性能调整：
+- 列表自动预览默认关闭，可在「设置 → 界面 → 浏览列表时自动预览视频」开启。
+- 视频流只预热下一条视频，最多保留两份已准备的播放资源。
+- 列表图片按展示尺寸请求并缩小解码，离屏或复用时取消未完成的加载。
+- 「博主视频」在打开面板时加载，按账号和博主缓存 5 分钟，最多缓存 8 位博主。
+- 正式版保留警告与错误日志；播放器的卡顿恢复检测仍然运行。
+- 投屏启用后立即广播，此后每 10 秒刷新一次，开关与前后台切换即时生效。
+
 ### 本项目没有任何授权的 Testflight 发放以及任何收费版本，请注意辨别和考虑安全性问题。
 
  **BiliBili tvOS 客户端 Demo 从未在任何平台上架和收费（包括AppStore与Testflight）**
@@ -10,7 +20,7 @@
 ### 支持功能
 - 二维码登录
 - 云视听小电视投屏协议
-- 直播与弹幕
+- 直播
 - 推荐Feed
 - 热门
 - 排行榜
@@ -19,12 +29,11 @@
 - 历史播放
 - 稍后再看
 - 系统播放器播放视频
-- 视频弹幕
-- 热门评论
-- 弹幕防挡
 - 云视听投屏
 - HDR播放
 - 字幕
+
+以下为原项目的历史截图，部分界面与本 fork 不同。
 
  ![](imgs/1.jpg)
  ![](imgs/2.jpg)
@@ -37,14 +46,12 @@
 
 ### 未签名iPA文件
 
-从 https://github.com/yichengchen/ATV-Bilibili-demo/releases/tag/nightly 获取基于最新代码构建的
+本 fork 可通过 `fastlane build_unsign_ipa` 构建未签名 IPA，或从本仓库成功运行的 GitHub Actions 中下载构建产物。原项目的预编译版本不包含本 fork 的修改。
 
 ### Links
 
 - App Icon [【22娘×33娘】亲爱的UP主，你怎么还在咕咕咕？](https://www.bilibili.com/video/BV1AB4y1k7em)
 
 - [thmatuza/MPEGDASHAVPlayerDemo](https://github.com/thmatuza/MPEGDASHAVPlayerDemo)
-
-- [dreamCodeMan/B-webmask](https://github.com/dreamCodeMan/B-webmask)
 
 - [分析Bilibili客户端的“哔哩必连”协议](https://xfangfang.github.io/028)

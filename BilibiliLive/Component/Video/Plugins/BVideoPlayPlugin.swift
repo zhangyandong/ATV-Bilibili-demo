@@ -26,7 +26,7 @@ class BVideoPlayPlugin: NSObject, CommonPlayerPlugin {
     private var lastMaxQuality: Int?
     private var lastStreamIndex: Int?
 
-    private var networkLogTimer: Timer?
+    private var playbackHealthTimer: Timer?
     private var lastStalls = 0
     private var lastDroppedFrames = 0
     private var cdnProbeReport = ""
@@ -76,7 +76,7 @@ class BVideoPlayPlugin: NSObject, CommonPlayerPlugin {
     private let stallTriggerCount = 2
     /// 换完 host 后的冷静期，避免连续误触发
     private let hostSwitchCooldown: TimeInterval = 30
-    private let networkLogInterval: TimeInterval = 5
+    private let playbackHealthInterval: TimeInterval = 5
     private var loadTask: Task<Void, Never>?
     private var loadGeneration = 0
 
@@ -97,7 +97,7 @@ class BVideoPlayPlugin: NSObject, CommonPlayerPlugin {
     }
 
     deinit {
-        networkLogTimer?.invalidate()
+        playbackHealthTimer?.invalidate()
     }
 
     /// 供 DebugPlugin 浮层显示的网络诊断信息
@@ -139,11 +139,11 @@ class BVideoPlayPlugin: NSObject, CommonPlayerPlugin {
     }
 
     func playerDidStart(player _: AVPlayer) {
-        startNetworkLogging()
+        startPlaybackHealthMonitoring()
     }
 
     func playerDidCleanUp(player: AVPlayer) {
-        stopNetworkLogging()
+        stopPlaybackHealthMonitoring()
         player.pause()
         player.replaceCurrentItem(with: nil)
     }
@@ -182,19 +182,20 @@ class BVideoPlayPlugin: NSObject, CommonPlayerPlugin {
         }
     }
 
-    private func startNetworkLogging() {
-        guard networkLogTimer == nil else { return }
-        networkLogTimer = Timer.scheduledTimer(withTimeInterval: networkLogInterval, repeats: true) { [weak self] _ in
-            self?.logNetworkStatus()
+    private func startPlaybackHealthMonitoring() {
+        guard playbackHealthTimer == nil else { return }
+        playbackHealthTimer = Timer.scheduledTimer(withTimeInterval: playbackHealthInterval, repeats: true) { [weak self] _ in
+            self?.samplePlaybackHealth()
         }
+        playbackHealthTimer?.tolerance = 0.5
     }
 
-    private func stopNetworkLogging() {
-        networkLogTimer?.invalidate()
-        networkLogTimer = nil
+    private func stopPlaybackHealthMonitoring() {
+        playbackHealthTimer?.invalidate()
+        playbackHealthTimer = nil
     }
 
-    private func logNetworkStatus() {
+    private func samplePlaybackHealth() {
         guard let player = playerVC?.player,
               let item = player.currentItem,
               let event = item.accessLog()?.events.last
@@ -207,22 +208,24 @@ class BVideoPlayPlugin: NSObject, CommonPlayerPlugin {
         // event.uri 是内部 variant playlist 的地址（我们用的是自定义 atv://dash/N scheme），
         // 解析出来的 host 恒为 "dash"，跟实际连的 CDN 无关；真实 host 记录在 playerDelegate 里。
         let host = playerDelegate?.currentSegmentHost ?? "-"
-        let observedBps = event.observedBitrate
-        let indicatedBps = event.indicatedBitrate
-        let effectiveIndicated = effectiveIndicatedBitrate(from: indicatedBps)
-        let observed = String(format: "%.1f", observedBps / 1_000_000)
-        let indicated = String(format: "%.1f", indicatedBps / 1_000_000)
-        let effective = String(format: "%.1f", effectiveIndicated / 1_000_000)
         let stalls = event.numberOfStalls
-        let dropped = event.numberOfDroppedVideoFrames
-        let tcs = player.timeControlStatus
-        let waiting = player.reasonForWaitingToPlay?.rawValue ?? "-"
-        let keepUp = item.isPlaybackLikelyToKeepUp
         let buffered = bufferedSeconds(of: item)
         let stallDelta = stalls - lastStalls
-        Logger.info("playback host \(host) observed \(observed)Mbps indicated \(indicated)Mbps effective \(effective)Mbps stalls \(stalls)(+\(stallDelta)) dropped \(dropped)(+\(dropped - lastDroppedFrames)) serverChanges \(event.numberOfServerAddressChanges) tcs \(tcs.rawValue) wait \(waiting) keepUp \(keepUp) buffered \(String(format: "%.1f", buffered))s")
+        #if DEBUG
+            let observedBps = event.observedBitrate
+            let indicatedBps = event.indicatedBitrate
+            let effectiveIndicated = effectiveIndicatedBitrate(from: indicatedBps)
+            let observed = String(format: "%.1f", observedBps / 1_000_000)
+            let indicated = String(format: "%.1f", indicatedBps / 1_000_000)
+            let effective = String(format: "%.1f", effectiveIndicated / 1_000_000)
+            let dropped = event.numberOfDroppedVideoFrames
+            let tcs = player.timeControlStatus
+            let waiting = player.reasonForWaitingToPlay?.rawValue ?? "-"
+            let keepUp = item.isPlaybackLikelyToKeepUp
+            Logger.debug("playback host \(host) observed \(observed)Mbps indicated \(indicated)Mbps effective \(effective)Mbps stalls \(stalls)(+\(stallDelta)) dropped \(dropped)(+\(dropped - lastDroppedFrames)) serverChanges \(event.numberOfServerAddressChanges) tcs \(tcs.rawValue) wait \(waiting) keepUp \(keepUp) buffered \(String(format: "%.1f", buffered))s")
+            lastDroppedFrames = dropped
+        #endif
         lastStalls = stalls
-        lastDroppedFrames = dropped
 
         checkStallHealth(stallDelta: stallDelta, buffered: buffered, currentHost: host)
     }

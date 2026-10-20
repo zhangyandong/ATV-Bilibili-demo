@@ -18,7 +18,6 @@ struct FeedFlowItem: Hashable {
     let avatarURL: URL?
     let durationText: String
     let viewCountText: String
-    let danmakuCountText: String
     let reasonText: String?
 
     init(aid: Int,
@@ -32,7 +31,6 @@ struct FeedFlowItem: Hashable {
          avatarURL: URL? = nil,
          durationText: String = "",
          viewCountText: String = "",
-         danmakuCountText: String = "",
          reasonText: String? = nil,
          identityKey: String? = nil)
     {
@@ -47,7 +45,6 @@ struct FeedFlowItem: Hashable {
         self.avatarURL = avatarURL
         self.durationText = durationText
         self.viewCountText = viewCountText
-        self.danmakuCountText = danmakuCountText
         self.reasonText = reasonText
         self.identityKey = identityKey ?? Self.makeIdentityKey(aid: aid, epid: epid, seasonId: seasonId)
     }

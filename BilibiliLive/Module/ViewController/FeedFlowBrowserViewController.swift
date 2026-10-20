@@ -66,8 +66,8 @@ class FeedFlowBrowserViewController: UIViewController, BLTabBarContentVCProtocol
         return view
     }()
 
-    private let previewPlaceholderView: UIImageView = {
-        let iv = UIImageView()
+    private let previewPlaceholderView: ThumbnailImageView = {
+        let iv = ThumbnailImageView()
         iv.contentMode = .scaleAspectFill
         iv.clipsToBounds = true
         return iv
@@ -469,25 +469,31 @@ class FeedFlowBrowserViewController: UIViewController, BLTabBarContentVCProtocol
     private func schedulePreview(for item: FeedFlowItem) {
         previewTask?.cancel()
         playbackWarmupTask?.cancel()
-        Task { [mediaWarmupManager] in
+        let cleanup = Task { [mediaWarmupManager, playContextCache] in
             await mediaWarmupManager.cancelAll()
+            await playContextCache.cancelPendingPreviews()
         }
         removePreviewController()
         restorePreviewPlaceholder(animated: false)
         updatePreviewTexts(with: item)
-        previewLoadingView.startAnimating()
+        previewLoadingView.stopAnimating()
         emptyStateLabel.isHidden = true
+        previewTask = nil
+        guard Settings.feedAutoPreviewEnabled else { return }
+        previewLoadingView.startAnimating()
         previewTask = Task { [weak self] in
             guard let self else { return }
+            await cleanup.value
             try? await Task.sleep(nanoseconds: preloadDelayNs)
-            guard !Task.isCancelled else { return }
+            guard !Task.isCancelled,
+                  Settings.feedAutoPreviewEnabled,
+                  presentedViewController == nil,
+                  view.window != nil,
+                  UIApplication.shared.applicationState == .active
+            else { return }
             await playContextCache.preload(playInfo: item.playInfo, mode: .preview)
-            let neighboringItems = self.neighborPlayInfos(around: self.focusedIndex)
-            for neighbor in neighboringItems {
-                await playContextCache.preload(playInfo: neighbor, mode: .preview)
-            }
-            await playContextCache.trim(keeping: neighboringItems)
             guard !Task.isCancelled else { return }
+            await playContextCache.trim(keeping: [item.playInfo])
             await MainActor.run {
                 guard !Task.isCancelled,
                       self.presentedViewController == nil,
@@ -547,8 +553,12 @@ class FeedFlowBrowserViewController: UIViewController, BLTabBarContentVCProtocol
         previewTask?.cancel()
         previewTask = nil
         previewLoadingView.stopAnimating()
+        previewPlaceholderView.cancelLoading()
         removePreviewController()
         restorePreviewPlaceholder(animated: false)
+        Task { [playContextCache] in
+            await playContextCache.cancelPendingPreviews()
+        }
         if cancelWarmups {
             playbackWarmupTask?.cancel()
             playbackWarmupTask = nil
@@ -561,43 +571,23 @@ class FeedFlowBrowserViewController: UIViewController, BLTabBarContentVCProtocol
     private func updatePreviewTexts(with item: FeedFlowItem) {
         previewTitleLabel.text = item.title
         previewMetaLabel.text = item.metaText
+        let hint = Settings.feedAutoPreviewEnabled
+            ? dataSource.defaultPreviewHintText
+            : "按确认键播放视频"
         previewHintLabel.text = item.reasonText?.isEmpty == false
-            ? "\(item.reasonText ?? "") · \(dataSource.defaultPreviewHintText)"
-            : dataSource.defaultPreviewHintText
-        if let coverURL = item.coverURL {
-            UIView.transition(with: previewPlaceholderView, duration: 0.25, options: .transitionCrossDissolve) {
-                self.previewPlaceholderView.kf.setImage(with: coverURL)
-            }
-        } else {
-            UIView.transition(with: previewPlaceholderView, duration: 0.25, options: .transitionCrossDissolve) {
-                self.previewPlaceholderView.image = nil
-            }
-        }
-    }
-
-    private func neighborPlayInfos(around index: Int) -> [PlayInfo] {
-        let lower = max(0, index - 1)
-        let upper = min(items.count - 1, index + 1)
-        guard !items.isEmpty, lower <= upper else { return [] }
-        return Array(items[lower...upper]).map(\.playInfo)
+            ? "\(item.reasonText ?? "") · \(hint)"
+            : hint
+        previewPlaceholderView.configure(url: item.coverURL, size: CGSize(width: 1280, height: 720))
     }
 
     private func prioritizedPlaybackWarmupInfos(for item: FeedFlowItem) -> [PlayInfo] {
-        guard let index = items.firstIndex(of: item) else { return [item.playInfo] }
-        var warmupInfos = [PlayInfo]()
-        warmupInfos.append(items[index].playInfo)
-        if items.indices.contains(index + 1) {
-            warmupInfos.append(items[index + 1].playInfo)
-        }
-        if items.indices.contains(index - 1) {
-            warmupInfos.append(items[index - 1].playInfo)
-        }
-        return warmupInfos.uniqued()
+        guard let index = items.firstIndex(of: item), items.indices.contains(index + 1) else { return [] }
+        return [items[index + 1].playInfo]
     }
 
     private func warmupPlaybackMedia(for item: FeedFlowItem) async {
         let warmupInfos = prioritizedPlaybackWarmupInfos(for: item)
-        await playContextCache.trim(keeping: warmupInfos)
+        await playContextCache.trim(keeping: [item.playInfo] + warmupInfos)
         for info in warmupInfos {
             guard !Task.isCancelled else { return }
             await playContextCache.preload(playInfo: info, mode: .regular)

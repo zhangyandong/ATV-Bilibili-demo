@@ -5,9 +5,7 @@
 //  Created by whw on 2022/10/19.
 //
 
-import Combine
 import Foundation
-import SwiftUI
 
 enum FeedDisplayStyle: Codable, CaseIterable {
     case large
@@ -17,13 +15,6 @@ enum FeedDisplayStyle: Codable, CaseIterable {
     var hideInSetting: Bool {
         self == .sideBar
     }
-}
-
-class Defaults {
-    static let shared = Defaults()
-    private init() {}
-
-    @Published(key: "Settings.danmuStatus") var showDanmu = true
 }
 
 enum Settings {
@@ -39,18 +30,6 @@ enum Settings {
     @UserDefaultCodable("Settings.mediaPlayerSpeed", defaultValue: PlaySpeed.default)
     static var mediaPlayerSpeed: PlaySpeed
 
-    @UserDefaultCodable("Settings.danmuArea", defaultValue: .style_75)
-    static var danmuArea: DanmuArea
-
-    @UserDefaultCodable("Settings.danmuSize", defaultValue: .size_36)
-    static var danmuSize: DanmuSize
-
-    @UserDefaultCodable("Settings.danmuAILevel", defaultValue: 1)
-    static var danmuAILevel: Int32
-
-    @UserDefaultCodable("Settings.danmuDuration", defaultValue: 8)
-    static var danmuDuration: Double
-
     @UserDefault("Settings.losslessAudio", defaultValue: false)
     static var losslessAudio: Bool
 
@@ -59,12 +38,6 @@ enum Settings {
 
     @UserDefault("Settings.multiCDNEnabled", defaultValue: false)
     static var multiCDNEnabled: Bool
-
-    @UserDefault("Settings.danmuMask", defaultValue: true)
-    static var danmuMask: Bool
-
-    @UserDefault("Settings.vnMask", defaultValue: false)
-    static var vnMask: Bool
 
     @UserDefault("Settings.loadHighestVideoOnly", defaultValue: false)
     static var loadHighestVideoOnly: Bool
@@ -114,6 +87,9 @@ enum Settings {
     @UserDefault("Settings.recommendFeedFlowEnabled", defaultValue: false)
     static var recommendFeedFlowEnabled: Bool
 
+    @UserDefault("Settings.feedAutoPreviewEnabled", defaultValue: false)
+    static var feedAutoPreviewEnabled: Bool
+
     @UserDefault("Settings.featuredContentSafetyFilterEnabled", defaultValue: true)
     static var featuredContentSafetyFilterEnabled: Bool
 
@@ -122,21 +98,6 @@ enum Settings {
 
     @UserDefaultCodable("Settings.SponsorBlockType", defaultValue: SponsorBlockType.none)
     static var enableSponsorBlock: SponsorBlockType
-
-    @UserDefault("Settings.danmuFilter", defaultValue: false)
-    static var enableDanmuFilter: Bool
-
-    @UserDefault("Settings.danmuRemoveDup", defaultValue: false)
-    static var enableDanmuRemoveDup: Bool
-
-    @UserDefaultCodable("Settings.danmuAlpha", defaultValue: .alpha_10)
-    static var danmuAlpha: DanmuAlpha
-
-    @UserDefaultCodable("Settings.danmuStrokeWidth", defaultValue: .width_20)
-    static var danmuStrokeWidth: DanmuStrokeWidth
-
-    @UserDefaultCodable("Settings.danmuStrokeAlpha", defaultValue: .alpha_08)
-    static var danmuStrokeAlpha: DanmuStrokeAlpha
 
     @UserDefaultCodable("Search.histories", defaultValue: [])
     static var searchHistories: [String]
@@ -187,116 +148,6 @@ enum SponsorBlockType: String, Codable, CaseIterable {
             return "自动跳过"
         case .tip:
             return "手动跳过"
-        }
-    }
-}
-
-enum DanmuArea: Codable, CaseIterable {
-    case style_75
-    case style_50
-    case style_25
-    case style_0
-}
-
-enum DanmuSize: String, Codable, CaseIterable {
-    case size_25
-    case size_31
-    case size_36
-    case size_42
-    case size_48
-    case size_57
-
-    var title: String {
-        return "\(Int(size)) pt"
-    }
-
-    var size: CGFloat {
-        switch self {
-        case .size_25:
-            return 25
-        case .size_31:
-            return 31
-        case .size_36:
-            return 36
-        case .size_42:
-            return 42
-        case .size_48:
-            return 48
-        case .size_57:
-            return 57
-        }
-    }
-}
-
-enum DanmuAlpha: Double, Codable, CaseIterable {
-    case alpha_03 = 0.3
-    case alpha_04 = 0.4
-    case alpha_05 = 0.5
-    case alpha_06 = 0.6
-    case alpha_07 = 0.7
-    case alpha_08 = 0.8
-    case alpha_09 = 0.9
-    case alpha_10 = 1.0
-
-    var title: String {
-        return String(format: "%.1f", rawValue)
-    }
-}
-
-enum DanmuStrokeWidth: Double, Codable, CaseIterable {
-    case width_0 = 0.0
-    case width_05 = 0.5
-    case width_10 = 1.0
-    case width_15 = 1.5
-    case width_20 = 2.0
-
-    var title: String {
-        return String(format: "%.1f", rawValue)
-    }
-}
-
-enum DanmuStrokeAlpha: Double, Codable, CaseIterable {
-    case alpha_00 = 0.0
-    case alpha_01 = 0.1
-    case alpha_02 = 0.2
-    case alpha_03 = 0.3
-    case alpha_04 = 0.4
-    case alpha_05 = 0.5
-    case alpha_06 = 0.6
-    case alpha_07 = 0.7
-    case alpha_08 = 0.8
-    case alpha_09 = 0.9
-    case alpha_10 = 1.0
-
-    var title: String {
-        return String(format: "%.1f", rawValue)
-    }
-}
-
-extension DanmuArea {
-    var title: String {
-        switch self {
-        case .style_75:
-            return "3/4屏"
-        case .style_50:
-            return "半屏"
-        case .style_25:
-            return "1/4屏"
-        case .style_0:
-            return "不限制"
-        }
-    }
-
-    var percent: CGFloat {
-        switch self {
-        case .style_75:
-            return 0.75
-        case .style_50:
-            return 0.5
-        case .style_25:
-            return 0.25
-        case .style_0:
-            return 1
         }
     }
 }

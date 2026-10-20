@@ -92,7 +92,6 @@ enum ApiRequest {
             switch response.result {
             case let .success(data):
                 let json = JSON(data)
-                print(json)
                 let errorCode = json["code"].intValue
                 if errorCode != 0 {
                     if errorCode == -101 {
@@ -102,13 +101,13 @@ enum ApiRequest {
                         }
                     }
                     let message = json["message"].stringValue
-                    print(errorCode, message)
+                    Logger.warn("API error \(errorCode): \(message)")
                     complete?(.failure(.statusFail(code: errorCode, message: message)))
                     return
                 }
                 complete?(.success(json))
             case let .failure(err):
-                print(err)
+                Logger.warn(err)
                 complete?(.failure(.networkFail))
             }
         }
@@ -130,7 +129,7 @@ enum ApiRequest {
                     let object = try decoder.decode(T.self, from: data)
                     complete?(.success(object))
                 } catch let err {
-                    print(err)
+                    Logger.warn(err)
                     complete?(.failure(.decodeFail(message: err.localizedDescription + String(describing: err))))
                 }
             case let .failure(err):
@@ -167,7 +166,7 @@ enum ApiRequest {
             case let .success(res):
                 handler?(res.authCode, res.url)
             case let .failure(error):
-                print(error)
+                Logger.warn(error)
             }
         }
     }
@@ -246,7 +245,7 @@ enum ApiRequest {
                 CookieHandler.shared.saveCookie(list: cookies)
                 AccountManager.shared.updateActiveAccount(token: res.tokenInfo, cookies: cookies)
             case let .failure(err):
-                print(err)
+                Logger.warn(err)
             }
         }
     }
@@ -268,13 +267,12 @@ enum ApiRequest {
             let bottom_rcmd_reason: String?
             let desc: String?
             let cover_left_text_1: String?
-            let cover_left_text_2: String?
             let cover_left_text_3: String?
             let cover_right_text: String?
 
             enum CodingKeys: String, CodingKey {
                 case can_play, title, param, args, idx, cover, goto, top_rcmd_reason, bottom_rcmd_reason, desc, player_args
-                case cover_left_text_1, cover_left_text_2, cover_left_text_3, cover_right_text
+                case cover_left_text_1, cover_left_text_3, cover_right_text
                 case avatar_info = "avatar"
             }
 
@@ -305,9 +303,6 @@ enum ApiRequest {
                 var rightItems = [DisplayOverlay.DisplayOverlayItem]()
                 if let text = cover_left_text_1 {
                     leftItems.append(DisplayOverlay.DisplayOverlayItem(icon: "play.rectangle", text: text))
-                }
-                if let text = cover_left_text_2 {
-                    leftItems.append(DisplayOverlay.DisplayOverlayItem(icon: "list.bullet.rectangle", text: text))
                 }
                 if let text = cover_right_text ?? cover_left_text_3 {
                     rightItems.append(DisplayOverlay.DisplayOverlayItem(icon: nil, text: text))
@@ -378,8 +373,8 @@ enum ApiRequest {
 
     struct BangumiInfo: Codable, Hashable {
         struct Stat: Codable, Hashable {
-            let coins, danmakus, favorite, favorites: Int
-            let likes, reply, share, views: Int
+            let coins, favorite, favorites: Int
+            let likes, share, views: Int
         }
 
         struct Rights: Codable, Hashable {
@@ -418,7 +413,6 @@ enum ApiRequest {
         let param: String
         let cover: URL?
         let play: Int
-        let danmaku: Int
         let duration: Int
         let ctime: Int
 
@@ -437,7 +431,6 @@ enum ApiRequest {
             var leftItems = [DisplayOverlay.DisplayOverlayItem]()
             var rightItems = [DisplayOverlay.DisplayOverlayItem]()
             leftItems.append(DisplayOverlay.DisplayOverlayItem(icon: "play.rectangle", text: play == 0 ? "-" : play.numberString()))
-            leftItems.append(DisplayOverlay.DisplayOverlayItem(icon: "list.bullet.rectangle", text: danmaku == 0 ? "-" : danmaku.numberString()))
             rightItems.append(DisplayOverlay.DisplayOverlayItem(icon: nil, text: TimeInterval(duration).timeString()))
             return DisplayOverlay(leftItems: leftItems, rightItems: rightItems)
         }

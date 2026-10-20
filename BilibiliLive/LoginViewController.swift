@@ -172,7 +172,6 @@ class LoginViewController: UIViewController {
             case .waiting:
                 break
             case let .success(token, cookies):
-                print(token)
                 AccountManager.shared.registerAccount(token: token, cookies: cookies) { [weak self] _ in
                     self?.didValidationSuccess()
                 }

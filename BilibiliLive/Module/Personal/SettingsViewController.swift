@@ -123,6 +123,9 @@ class SettingsViewController: UIViewController {
             }
 
             SectionModel(title: "界面") {
+                Toggle(title: "浏览列表时自动预览视频",
+                       setting: Settings.feedAutoPreviewEnabled,
+                       onChange: Settings.feedAutoPreviewEnabled.toggle())
                 Navigation(title: "自定义Tab栏", desp: "") { [weak self] in
                     let controller = TabBarCustomizationViewController()
                     self?.present(controller, animated: true)
@@ -207,60 +210,6 @@ class SettingsViewController: UIViewController {
                         optionString: SponsorBlockType.allCases.map({ $0.title }))
                 {
                     Settings.enableSponsorBlock = $0
-                }
-            }
-
-            SectionModel(title: "弹幕") {
-                Toggle(title: "用户自定义弹幕屏蔽", setting: Settings.enableDanmuFilter, onChange: Settings.enableDanmuFilter.toggle()) {
-                    enable in
-                    if enable {
-                        Task {
-                            let toast = await VideoDanmuFilter.shared.update()
-                            let alert = UIAlertController(title: "同步结果", message: toast, preferredStyle: .alert)
-                            alert.addAction(.init(title: "Ok", style: .cancel))
-                            self.present(alert, animated: true)
-                        }
-                    }
-                }
-                Toggle(title: "移除重复弹幕", setting: Settings.enableDanmuRemoveDup, onChange: Settings.enableDanmuRemoveDup.toggle())
-                Actions(title: "弹幕大小", message: "默认为36", current: Settings.danmuSize.title, options: DanmuSize.allCases, optionString: DanmuSize.allCases.map({ $0.title })) {
-                    Settings.danmuSize = $0
-                }
-                Actions(title: "弹幕显示区域", message: "设置弹幕显示区域",
-                        current: Settings.danmuArea.title,
-                        options: DanmuArea.allCases,
-                        optionString: DanmuArea.allCases.map({ $0.title }))
-                {
-                    Settings.danmuArea = $0
-                }
-                Toggle(title: "智能防档弹幕", setting: Settings.danmuMask, onChange: Settings.danmuMask.toggle())
-                Toggle(title: "按需本地运算智能防档弹幕(Exp)", setting: Settings.vnMask, onChange: Settings.vnMask.toggle())
-
-                // 添加弹幕透明度设置
-                Actions(title: "弹幕透明度", message: "调整弹幕的透明度",
-                        current: Settings.danmuAlpha.title,
-                        options: DanmuAlpha.allCases,
-                        optionString: DanmuAlpha.allCases.map({ $0.title }))
-                { value in
-                    Settings.danmuAlpha = value
-                }
-
-                // 添加弹幕描边宽度设置
-                Actions(title: "弹幕描边宽度", message: "调整弹幕描边的粗细",
-                        current: Settings.danmuStrokeWidth.title,
-                        options: DanmuStrokeWidth.allCases,
-                        optionString: DanmuStrokeWidth.allCases.map({ $0.title }))
-                { value in
-                    Settings.danmuStrokeWidth = value
-                }
-
-                // 添加弹幕描边透明度设置
-                Actions(title: "弹幕描边透明度", message: "调整弹幕描边的透明度",
-                        current: Settings.danmuStrokeAlpha.title,
-                        options: DanmuStrokeAlpha.allCases,
-                        optionString: DanmuStrokeAlpha.allCases.map({ $0.title }))
-                { value in
-                    Settings.danmuStrokeAlpha = value
                 }
             }
 

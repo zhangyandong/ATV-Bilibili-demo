@@ -7,7 +7,6 @@
 
 import Alamofire
 import Foundation
-import SwiftProtobuf
 import SwiftyJSON
 
 enum RequestError: Error {
@@ -61,8 +60,6 @@ enum WebRequest {
         static let pcgPlayUrl = "https://api.bilibili.com/pgc/player/web/playurl"
         static let bangumiSeason = "https://bangumi.bilibili.com/view/web_api/season"
         static let userEpisodeInfo = "https://api.bilibili.com/pgc/season/episode/web/info"
-        static let danmuWebView = "https://api.bilibili.com/x/v2/dm/web/view"
-        static let danmuList = "https://api.bilibili.com/x/v2/dm/list/seg.so"
 //        static let spi = "https://api.bilibili.com/x/frontend/finger/spi"
     }
 
@@ -107,7 +104,7 @@ enum WebRequest {
             case let .success(data):
                 complete?(.success(data))
             case let .failure(err):
-                print(err)
+                Logger.warn(err)
                 complete?(.failure(.networkFail))
             }
         }
@@ -145,7 +142,7 @@ enum WebRequest {
                 let errorCode = json["code"].intValue
                 if errorCode != 0 {
                     let message = json["message"].stringValue
-                    print(errorCode, message)
+                    Logger.warn("API error \(errorCode): \(message)")
 
                     // Handle captcha validation error (-352)
                     if errorCode == -352 {
@@ -157,9 +154,6 @@ enum WebRequest {
                     return
                 }
                 let dataj = json[dataObj]
-                #if DEBUG
-                    print("\(url) response: \(json)")
-                #endif
                 complete?(.success(dataj))
             case let .failure(err):
                 complete?(.failure(err))
@@ -201,29 +195,6 @@ enum WebRequest {
         })
     }
 
-    static func requestPB<T: SwiftProtobuf.Message>(method: HTTPMethod = .get,
-                                                    url: URLConvertible,
-                                                    parameters: Parameters = [:],
-                                                    headers: [String: String]? = nil,
-                                                    noCookie: Bool = false,
-                                                    complete: ((Result<T, RequestError>) -> Void)? = nil)
-    {
-        requestData(method: method, url: url, parameters: parameters, headers: headers, noCookie: noCookie) { response in
-            switch response {
-            case let .success(data):
-                do {
-                    let protobufObject = try T(serializedBytes: data)
-                    complete?(.success(protobufObject))
-                } catch let err {
-                    Logger.warn("Protobuf parsing error: \(err.localizedDescription)")
-                    complete?(.failure(.decodeFail(message: "probobuf decode error: \(err)")))
-                }
-            case let .failure(err):
-                complete?(.failure(err))
-            }
-        }
-    }
-
     static func requestJSON(method: HTTPMethod = .get,
                             url: URLConvertible,
                             parameters: Parameters = [:],
@@ -246,26 +217,6 @@ enum WebRequest {
     {
         return try await withCheckedThrowingContinuation { configure in
             request(method: method, url: url, parameters: parameters, headers: headers, decoder: decoder, dataObj: dataObj, noCookie: noCookie) {
-                (res: Result<T, RequestError>) in
-                switch res {
-                case let .success(content):
-                    configure.resume(returning: content)
-                case let .failure(err):
-                    configure.resume(throwing: err)
-                }
-            }
-        }
-    }
-
-    static func requestPB<T: SwiftProtobuf.Message>(method: HTTPMethod = .get,
-                                                    url: URLConvertible,
-                                                    parameters: Parameters = [:],
-                                                    headers: [String: String]? = nil,
-                                                    noCookie: Bool = false,
-                                                    dataObj _: String = "data") async throws -> T
-    {
-        return try await withCheckedThrowingContinuation { configure in
-            requestPB(method: method, url: url, parameters: parameters, headers: headers, noCookie: noCookie) {
                 (res: Result<T, RequestError>) in
                 switch res {
                 case let .success(content):
@@ -561,15 +512,6 @@ extension WebRequest {
                                  dataObj: "result")
     }
 
-    static func requestReplys(aid: Int, complete: ((Replys) -> Void)?) {
-        request(url: "https://api.bilibili.com/x/v2/reply", parameters: ["type": 1, "oid": aid, "sort": 1, "nohot": 0]) {
-            (result: Result<Replys, RequestError>) in
-            if let details = try? result.get() {
-                complete?(details)
-            }
-        }
-    }
-
     static func requestSubtitle(url: URL) async throws -> [SubtitleContent] {
         struct SubtitlContenteResp: Codable {
             let body: [SubtitleContent]
@@ -583,21 +525,12 @@ extension WebRequest {
         let cid = res[0]["cid"].intValue
         return cid
     }
-
-    static func requestDanmuWebView(cid: Int) async throws -> DmWebViewReply {
-        try await requestPB(url: EndPoint.danmuWebView, parameters: ["type": 1, "oid": cid])
-    }
-
-    static func requestDanmuList(cid: Int, segmentIdx: Int) async throws -> DmSegMobileReply {
-        try await requestPB(url: EndPoint.danmuList, parameters: ["type": 1, "oid": cid, "segment_index": segmentIdx])
-    }
 }
 
 struct WebTopFeedRecommendResponse: Codable, Hashable {
     struct Item: Codable, Hashable {
         struct Stat: Codable, Hashable {
             let view: Int?
-            let danmaku: Int?
         }
 
         struct RecommendReason: Codable, Hashable {
@@ -669,11 +602,11 @@ extension WebRequest {
     static func logout(complete: (() -> Void)? = nil) {
         request(method: .post, url: EndPoint.logout) {
             (result: Result<[String: String], RequestError>) in
-            if let details = try? result.get() {
-                print("logout success")
-                print(details)
-            } else {
-                print("logout fail")
+            switch result {
+            case .success:
+                Logger.debug("logout success")
+            case let .failure(error):
+                Logger.warn(error)
             }
             CookieHandler.shared.removeCookie()
             complete?()
@@ -689,7 +622,7 @@ extension WebRequest {
     }
 }
 
-extension WebRequest.UpSpaceInfo : AvatarProviding {
+extension WebRequest.UpSpaceInfo: AvatarProviding {
     var avatar: URL? { face }
 }
 
@@ -732,7 +665,6 @@ struct HistoryData: DisplayData, Codable {
 
     struct Stat: Codable, Hashable {
         let view: Int
-        let danmaku: Int
     }
 }
 
@@ -755,7 +687,6 @@ struct FavData: PlayableData, Codable {
 
     struct CountInfo: Codable, Hashable {
         let play: Int
-        let danmaku: Int
     }
 
     var aid: Int {
@@ -776,7 +707,6 @@ struct FavData: PlayableData, Codable {
         var rightItems = [DisplayOverlay.DisplayOverlayItem]()
         if let stat = cnt_info {
             leftItems.append(DisplayOverlay.DisplayOverlayItem(icon: "play.rectangle", text: stat.play == 0 ? "-" : stat.play.numberString()))
-            leftItems.append(DisplayOverlay.DisplayOverlayItem(icon: "list.bullet.rectangle", text: stat.danmaku == 0 ? "-" : stat.danmaku.numberString()))
         }
         rightItems.append(DisplayOverlay.DisplayOverlayItem(icon: nil, text: TimeInterval(duration).timeString()))
         return DisplayOverlay(leftItems: leftItems, rightItems: rightItems)
@@ -834,7 +764,6 @@ struct VideoDetail: Codable, Hashable {
             let coin: Int
             let like: Int
             let share: Int
-            let danmaku: Int
             let view: Int
         }
 
@@ -917,7 +846,6 @@ extension VideoDetail.Info: DisplayData, PlayableData {
         var leftItems = [DisplayOverlay.DisplayOverlayItem]()
         var rightItems = [DisplayOverlay.DisplayOverlayItem]()
         leftItems.append(DisplayOverlay.DisplayOverlayItem(icon: "play.rectangle", text: stat.view == 0 ? "-" : stat.view.numberString()))
-        leftItems.append(DisplayOverlay.DisplayOverlayItem(icon: "list.bullet.rectangle", text: stat.danmaku == 0 ? "-" : stat.danmaku.numberString()))
         rightItems.append(DisplayOverlay.DisplayOverlayItem(icon: nil, text: TimeInterval(duration).timeString()))
         return DisplayOverlay(leftItems: leftItems, rightItems: rightItems)
     }
@@ -940,41 +868,6 @@ struct SubtitleData: Codable, Hashable {
     }
 
     var subtitleContents: [SubtitleContent]?
-}
-
-struct Replys: Codable, Hashable {
-    struct Reply: Codable, Hashable {
-        struct Member: Codable, Hashable {
-            let uname: String
-            let avatar: String
-        }
-
-        struct Emote: Codable, Hashable {
-            let text: String
-            let url: String
-        }
-
-        struct JumpUrl: Codable, Hashable {
-            let title: String
-        }
-
-        struct Content: Codable, Hashable {
-            let message: String
-            let pictures: [Picture]?
-            let emote: [String: Emote]?
-            let jump_url: [String: JumpUrl]?
-
-            struct Picture: Codable, Hashable {
-                let img_src: String
-            }
-        }
-
-        let member: Member
-        let content: Content
-        let replies: [Reply]?
-    }
-
-    let replies: [Reply]?
 }
 
 struct BangumiSeasonInfo: Codable {
@@ -1092,9 +985,7 @@ struct UserEpisodeInfo: Codable, Hashable {
 
     struct Stat: Codable, Hashable {
         let coin: Int
-        let dm: Int
         let like: Int
-        let reply: Int
         let view: Int
     }
 
@@ -1146,7 +1037,6 @@ struct PlayerInfo: Codable {
     let last_play_time: Int
     let subtitle: SubtitleResp?
     let view_points: [ViewPoint]?
-    let dm_mask: MaskInfo?
     let last_play_cid: Int
     let is_upower_exclusive: Bool?
     var playTimeInSecond: Int {
@@ -1165,11 +1055,6 @@ struct PlayerInfo: Codable {
         enum CodingKeys: String, CodingKey {
             case type, from, to, content, imgUrl
         }
-    }
-
-    struct MaskInfo: Codable {
-        let mask_url: URL?
-        let fps: Int
     }
 }
 

@@ -6,7 +6,6 @@
 //
 
 import AVKit
-import Combine
 import Foundation
 import UIKit
 
@@ -40,7 +39,6 @@ class VideoDetailViewController: UIViewController {
     @IBOutlet var actionButtonSpaceView: UIView!
     @IBOutlet var durationLabel: UILabel!
     @IBOutlet var playCountLabel: UILabel!
-    @IBOutlet var danmakuLabel: UILabel!
     @IBOutlet var uploadTimeLabel: UILabel!
     @IBOutlet var bvidLabel: UILabel!
     @IBOutlet var followersLabel: UILabel!
@@ -48,8 +46,6 @@ class VideoDetailViewController: UIViewController {
     @IBOutlet var favButton: BLCustomButton!
     @IBOutlet var pageCollectionView: UICollectionView!
     @IBOutlet var recommandCollectionView: UICollectionView!
-    @IBOutlet var replysCollectionView: UICollectionView!
-    @IBOutlet var repliesCollectionViewHeightConstraints: NSLayoutConstraint!
     @IBOutlet var ugcCollectionView: UICollectionView!
     @IBOutlet var pageView: UIView!
     @IBOutlet var ugcLabel: UILabel!
@@ -93,12 +89,9 @@ class VideoDetailViewController: UIViewController {
     private var isBangumi = false
     private var startTime = 0
     private var pages = [VideoPage]()
-    private var replys: Replys?
     private var subTitles: [SubtitleData]?
 
     private var allUgcEpisodes = [VideoDetail.Info.UgcSeason.UgcVideoInfo]()
-
-    private var subscriptions = [AnyCancellable]()
 
     static func create(aid: Int, cid: Int?, epid: Int? = nil) -> VideoDetailViewController {
         let vc = UIStoryboard(name: "Main", bundle: .main).instantiateViewController(identifier: String(describing: self)) as! VideoDetailViewController
@@ -156,11 +149,6 @@ class VideoDetailViewController: UIViewController {
             focusGuide.bottomAnchor.constraint(equalTo: actionButtonSpaceView.bottomAnchor),
         ])
         focusGuide.preferredFocusEnvironments = [dislikeButton]
-
-        replysCollectionView.publisher(for: \.contentSize).sink { [weak self] newSize in
-            self?.repliesCollectionViewHeightConstraints.constant = newSize.height
-            self?.view.setNeedsLayout()
-        }.store(in: &subscriptions)
 
         Task { await fetchData() }
     }
@@ -335,11 +323,6 @@ class VideoDetailViewController: UIViewController {
             }
         }
 
-        WebRequest.requestReplys(aid: aid) { [weak self] replys in
-            self?.replys = replys
-            self?.replysCollectionView.reloadData()
-        }
-
         WebRequest.requestLikeStatus(aid: aid) { [weak self] isLiked in
             self?.likeButton.isOn = isLiked
         }
@@ -381,7 +364,7 @@ class VideoDetailViewController: UIViewController {
 
                 let userEpisodeInfo = try await WebRequest.requestUserEpisodeInfo(epid: epi.ep_id)
 
-                let data = VideoDetail(View: VideoDetail.Info(aid: aid, cid: cid, title: info.title, videos: nil, pic: epi.cover, desc: info.evaluate, owner: VideoOwner(mid: season.up_info.mid, name: season.up_info.uname, face: season.up_info.avatar), pages: nil, dynamic: nil, bvid: epi.bvid, duration: epi.durationSeconds, pubdate: epi.pubdate, ugc_season: nil, redirect_url: nil, stat: VideoDetail.Info.Stat(favorite: info.stat.favorites, coin: info.stat.coins, like: info.stat.likes, share: info.stat.share, danmaku: info.stat.danmakus, view: info.stat.views)), Related: [], Card: VideoDetail.Owner(following: userEpisodeInfo.related_up.first?.is_follow == 1, follower: season.up_info.follower))
+                let data = VideoDetail(View: VideoDetail.Info(aid: aid, cid: cid, title: info.title, videos: nil, pic: epi.cover, desc: info.evaluate, owner: VideoOwner(mid: season.up_info.mid, name: season.up_info.uname, face: season.up_info.avatar), pages: nil, dynamic: nil, bvid: epi.bvid, duration: epi.durationSeconds, pubdate: epi.pubdate, ugc_season: nil, redirect_url: nil, stat: VideoDetail.Info.Stat(favorite: info.stat.favorites, coin: info.stat.coins, like: info.stat.likes, share: info.stat.share, view: info.stat.views)), Related: [], Card: VideoDetail.Owner(following: userEpisodeInfo.related_up.first?.is_follow == 1, follower: season.up_info.follower))
 
                 self.data = data
                 update(with: data)
@@ -389,7 +372,7 @@ class VideoDetailViewController: UIViewController {
             }
 
         } catch let err {
-            print(err)
+            Logger.warn(err)
         }
 
         return false
@@ -397,7 +380,6 @@ class VideoDetailViewController: UIViewController {
 
     private func update(with data: VideoDetail) {
         playCountLabel.text = data.View.stat.view.numberString()
-        danmakuLabel.text = data.View.stat.danmaku.numberString()
         followersLabel.text = (data.Card.follower ?? 0).numberString() + "粉丝"
         uploadTimeLabel.text = data.View.date
         bvidLabel.text = data.View.bvid
@@ -419,7 +401,8 @@ class VideoDetailViewController: UIViewController {
             }
         }
 
-        avatarImageView.kf.setImage(with: data.avatar(size: 240), options: [.processor(DownsamplingImageProcessor(size: CGSize(width: 80, height: 80))), .processor(RoundCornerImageProcessor(radius: .widthFraction(0.5))), .cacheSerializer(FormatIndicatedCacheSerializer.png)])
+        let avatarProcessor = DownsamplingImageProcessor(size: CGSize(width: 80, height: 80)) |> RoundCornerImageProcessor(radius: .widthFraction(0.5))
+        avatarImageView.kf.setImage(with: data.avatar(size: 80), options: [.processor(avatarProcessor), .cacheSerializer(FormatIndicatedCacheSerializer.png)])
 
         coverImageView.kf.setImage(with: data.pic)
         backgroundImageView.kf.setImage(with: data.pic)
@@ -601,10 +584,6 @@ extension VideoDetailViewController: UICollectionViewDelegate {
                 player.sequenceProvider = VideoSequenceProvider(seq: seq, currentIndex: indexPath.item)
             }
             present(player, animated: true, completion: nil)
-        case replysCollectionView:
-            guard let reply = replys?.replies?[indexPath.item] else { return }
-            let detail = ReplyDetailViewController(reply: reply)
-            present(detail, animated: true)
         case ugcCollectionView:
             let video = allUgcEpisodes[indexPath.item]
             if Settings.showRelatedVideoInCurrentVC {
@@ -639,8 +618,6 @@ extension VideoDetailViewController: UICollectionViewDataSource {
             return pageRanges.count
         case pageCollectionView:
             return pages.count
-        case replysCollectionView:
-            return replys?.replies?.count ?? 0
         case ugcCollectionView:
             return allUgcEpisodes.count
         case recommandCollectionView:
@@ -660,12 +637,6 @@ extension VideoDetailViewController: UICollectionViewDataSource {
             let cell = collectionView.dequeueReusableCell(withReuseIdentifier: "BLTextOnlyCollectionViewCell", for: indexPath) as! BLTextOnlyCollectionViewCell
             let page = pages[indexPath.item]
             cell.titleLabel.text = page.part
-            return cell
-        case replysCollectionView:
-            let cell = collectionView.dequeueReusableCell(withReuseIdentifier: String(describing: ReplyCell.self), for: indexPath) as! ReplyCell
-            if let reply = replys?.replies?[indexPath.item] {
-                cell.config(replay: reply)
-            }
             return cell
         case ugcCollectionView:
             let cell = collectionView.dequeueReusableCell(withReuseIdentifier: String(describing: RelatedVideoCell.self), for: indexPath) as! RelatedVideoCell
@@ -746,7 +717,7 @@ extension VideoDetailViewController {
 
 class RelatedVideoCell: BLMotionCollectionViewCell {
     let titleLabel = MarqueeLabel()
-    let imageView = UIImageView()
+    let imageView = ThumbnailImageView()
     override func setup() {
         super.setup()
         contentView.addSubview(imageView)
@@ -770,7 +741,7 @@ class RelatedVideoCell: BLMotionCollectionViewCell {
 
     func update(data: any DisplayData) {
         titleLabel.text = data.title
-        imageView.kf.setImage(with: data.pic, options: [.processor(DownsamplingImageProcessor(size: CGSize(width: 360, height: 202))), .cacheOriginalImage])
+        imageView.configure(url: data.pic, size: CGSize(width: 360, height: 232))
     }
 
     override func didUpdateFocus(in context: UIFocusUpdateContext, with coordinator: UIFocusAnimationCoordinator) {
@@ -794,6 +765,7 @@ class RelatedVideoCell: BLMotionCollectionViewCell {
 
     override func prepareForReuse() {
         super.prepareForReuse()
+        imageView.configure(url: nil, size: .zero)
         stopScroll()
     }
 }
@@ -886,13 +858,6 @@ class ContentDetailViewController: UIViewController {
     static func createDesp(content: String) -> ContentDetailViewController {
         let vc = ContentDetailViewController()
         vc.titleLabel.text = "简介"
-        vc.contentTextView.text = content
-        return vc
-    }
-
-    static func createReply(content: String) -> ContentDetailViewController {
-        let vc = ContentDetailViewController()
-        vc.titleLabel.text = "评论"
         vc.contentTextView.text = content
         return vc
     }

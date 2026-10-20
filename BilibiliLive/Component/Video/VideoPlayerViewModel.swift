@@ -42,7 +42,6 @@ class VideoPlayerViewModel {
     private let startTimeOverride: Int?
     private let startTimeOverrideContentIdentity: String
     private var videoDetail: VideoDetail?
-    private var cancellable = Set<AnyCancellable>()
     private var loadTask: Task<Void, Never>?
     private var loadGeneration = 0
 
@@ -97,18 +96,11 @@ class VideoPlayerViewModel {
             let (resolvedPlayInfo, data) = try await loadVideoInfo(for: requestedPlayInfo)
             guard !Task.isCancelled, loadGeneration == generation else { return }
 
-            let danmuProvider = VideoDanmuProvider(enableDanmuFilter: Settings.enableDanmuFilter,
-                                                   enableDanmuRemoveDup: Settings.enableDanmuRemoveDup)
-            await danmuProvider.initVideo(cid: data.cid, startPos: data.playerStartPos ?? 0)
-            guard !Task.isCancelled, loadGeneration == generation else { return }
-
             playInfo = resolvedPlayInfo
             videoDetail = data.detail
             BiliBiliUpnpDMR.shared.sendVideoSwitch(aid: resolvedPlayInfo.aid, cid: data.cid)
-            cancellable.removeAll()
             let plugins = generatePlayerPlugin(data,
-                                               playInfo: resolvedPlayInfo,
-                                               danmuProvider: danmuProvider)
+                                               playInfo: resolvedPlayInfo)
             guard !Task.isCancelled, loadGeneration == generation else { return }
             loadResult.send(.success(plugins))
         } catch is CancellationError {
@@ -268,15 +260,13 @@ class VideoPlayerViewModel {
     func preloadNeighborsIfNeeded() async {
         guard playMode == .feedFlow, let playContextCache, let sequenceProvider else { return }
         let current = sequenceProvider.current() ?? currentPlayInfo
-        let priority = [current,
-                        sequenceProvider.peekNext(),
-                        sequenceProvider.peekPrevious()].compactMap { $0 }.uniqued()
+        let priority = [sequenceProvider.peekNext()].compactMap { $0 }.filter { $0.sequenceKey != current.sequenceKey }
         for info in priority {
             guard !Task.isCancelled else { return }
             await playContextCache.preload(playInfo: info, mode: .regular)
         }
         guard !Task.isCancelled else { return }
-        await playContextCache.trim(keeping: priority)
+        await playContextCache.trim(keeping: [current] + priority)
         for info in priority {
             guard !Task.isCancelled else { return }
             await mediaWarmupManager?.preload(playInfo: info)
@@ -284,8 +274,7 @@ class VideoPlayerViewModel {
     }
 
     private func generatePlayerPlugin(_ data: PlayerDetailData,
-                                      playInfo: PlayInfo,
-                                      danmuProvider: VideoDanmuProvider) -> [CommonPlayerPlugin]
+                                      playInfo: PlayInfo) -> [CommonPlayerPlugin]
     {
         let playplugin = BVideoPlayPlugin(playInfo: playInfo,
                                           detailData: data,
@@ -301,16 +290,12 @@ class VideoPlayerViewModel {
             return [playplugin]
         }
 
-        let danmu = DanmuViewPlugin(provider: danmuProvider)
         let upnp = BUpnpPlugin(duration: data.detail?.View.duration)
         let debug = DebugPlugin()
         debug.additionDebugInfo = { [weak playplugin] in
             playplugin?.networkDebugInfo ?? ""
         }
         let playSpeed = SpeedChangerPlugin()
-        playSpeed.$currentPlaySpeed.sink { [weak danmu] speed in
-            danmu?.danMuView.playingSpeed = speed.value
-        }.store(in: &cancellable)
 
         let playlist = VideoPlayListPlugin(sequenceProvider: sequenceProvider)
         playlist.onPlayEnd = { [weak self] in
@@ -327,7 +312,7 @@ class VideoPlayerViewModel {
         }
 
         // SpeedChangerPlugin creates the shared settings menu that later plugins extend.
-        var plugins: [CommonPlayerPlugin] = [playSpeed, playplugin, danmu, upnp, debug, playlist]
+        var plugins: [CommonPlayerPlugin] = [playSpeed, playplugin, upnp, debug, playlist]
 
         if !data.isBangumi, let detail = data.detail {
             let infoTabs = VideoPlayerInfoTabsPlugin(detail: detail,
@@ -356,19 +341,6 @@ class VideoPlayerViewModel {
         if Settings.enableSponsorBlock != .none, let bvid = data.detail?.View.bvid, let duration = data.detail?.View.duration {
             let sponsor = SponsorSkipPlugin(bvid: bvid, duration: duration)
             plugins.append(sponsor)
-        }
-
-        if Settings.danmuMask {
-            if let mask = data.playerInfo?.dm_mask,
-               let video = data.videoPlayURLInfo.dash.video.first,
-               mask.fps > 0
-            {
-                let maskProvider = BMaskProvider(info: mask, videoSize: CGSize(width: video.width ?? 0, height: video.height ?? 0))
-                plugins.append(MaskViewPugin(maskView: danmu.danMuView, maskProvider: maskProvider))
-            } else if Settings.vnMask {
-                let maskProvider = VMaskProvider()
-                plugins.append(MaskViewPugin(maskView: danmu.danMuView, maskProvider: maskProvider))
-            }
         }
 
         // 默认视频标题作主标题 up主用户名作副标题
@@ -426,7 +398,7 @@ extension VideoPlayerViewModel {
                 if area == areaList.last {
                     throw err
                 } else {
-                    print(err)
+                    Logger.warn(err)
                 }
             }
         }

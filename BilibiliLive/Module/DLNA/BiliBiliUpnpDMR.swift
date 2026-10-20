@@ -30,7 +30,8 @@ class BiliBiliUpnpDMR: NSObject {
     @MainActor private var sessions = Set<NVASession>()
     private var started = false
     private var ip: String?
-    private var boardcastTimer: Timer?
+    private var broadcastTimer: Timer?
+    private var routesConfigured = false
 
     private lazy var serverInfo: String = {
         let file = Bundle.main.url(forResource: "DLNAInfo", withExtension: "xml")!
@@ -62,12 +63,25 @@ class BiliBiliUpnpDMR: NSObject {
         return randomString
     }()
 
-    override private init() { super.init() }
-    func start() {
-        startIfNeed()
+    override private init() {
+        super.init()
         NotificationCenter.default.addObserver(self, selector: #selector(didEnterBackground), name: UIApplication.didEnterBackgroundNotification, object: nil)
-        NotificationCenter.default.addObserver(self, selector: #selector(willEnterForeground), name: UIApplication.willEnterForegroundNotification, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(didBecomeActive), name: UIApplication.didBecomeActiveNotification, object: nil)
+    }
 
+    func start() {
+        guard Settings.enableDLNA, UIApplication.shared.applicationState != .background else {
+            if started { stop() }
+            return
+        }
+        if !routesConfigured {
+            configureRoutes()
+            routesConfigured = true
+        }
+        startIfNeed()
+    }
+
+    private func configureRoutes() {
         httpServer["/description.xml"] = { [weak self] req in
             Logger.debug("handel serverInfo")
             return HttpResponse.ok(.text(self?.serverInfo ?? ""))
@@ -127,11 +141,13 @@ class BiliBiliUpnpDMR: NSObject {
     }
 
     func stop() {
-        boardcastTimer?.invalidate()
-        boardcastTimer = nil
+        broadcastTimer?.invalidate()
+        broadcastTimer = nil
         udp?.close()
+        udp = nil
         httpServer.stop()
         started = false
+        ip = nil
         Logger.info("dmr stopped")
     }
 
@@ -139,23 +155,26 @@ class BiliBiliUpnpDMR: NSObject {
         stop()
     }
 
-    @objc func willEnterForeground() {
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-            self.startIfNeed()
-        }
+    @objc func didBecomeActive() {
+        start()
     }
 
     private func startIfNeed() {
-        stop()
-        guard Settings.enableDLNA else { return }
-        ip = getIPAddress()
+        let currentIP = getIPAddress()
+        guard let currentIP, !currentIP.isEmpty else {
+            if started { stop() }
+            return
+        }
+        guard !started || ip != currentIP else { return }
+        if started { stop() }
+        ip = currentIP
         do {
             udp = GCDAsyncUdpSocket(delegate: self, delegateQueue: udpQueue)
-            try? udp.enableBroadcast(true)
-            try? udp.enableReusePort(true)
-            try? udp.bind(toPort: ssdpPort)
-            try? udp.joinMulticastGroup(ssdpHost)
-            try? udp.beginReceiving()
+            try udp.enableBroadcast(true)
+            try udp.enableReusePort(true)
+            try udp.bind(toPort: ssdpPort)
+            try udp.joinMulticastGroup(ssdpHost)
+            try udp.beginReceiving()
             try httpServer.start(httpPort)
             started = true
             Logger.info("dmr started, http: \(httpPort), ssdp: \(ssdpPort)")
@@ -167,15 +186,17 @@ class BiliBiliUpnpDMR: NSObject {
             Logger.warn("dmr start fail: \(err.localizedDescription).")
             return
         }
-        boardcastTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) {
-            [weak self] _ in
-            guard let self else { return }
-            guard started else { return }
-            guard let notify = getSSDPNotify(),
-                  let data = notify.data(using: .utf8)
-            else { return }
-            udp.send(data, toHost: ssdpHost, port: ssdpPort, withTimeout: 1, tag: 0)
+        sendAdvertisement()
+        // The advertised lifetime is 30 seconds; refresh well before it expires.
+        broadcastTimer = Timer.scheduledTimer(withTimeInterval: 10, repeats: true) { [weak self] _ in
+            self?.sendAdvertisement()
         }
+        broadcastTimer?.tolerance = 1
+    }
+
+    private func sendAdvertisement() {
+        guard started, let notify = getSSDPNotify(), let data = notify.data(using: .utf8) else { return }
+        udp?.send(data, toHost: ssdpHost, port: ssdpPort, withTimeout: 1, tag: 0)
     }
 
     private func getIPAddress() -> String? {
@@ -265,10 +286,6 @@ class BiliBiliUpnpDMR: NSObject {
             session.sendEmpty()
         case "Resume":
             currentPlugin?.resume()
-            session.sendEmpty()
-        case "SwitchDanmaku":
-            let json = JSON(parseJSON: frame.body)
-            Defaults.shared.showDanmu = json["open"].boolValue
             session.sendEmpty()
         case "Seek":
             let json = JSON(parseJSON: frame.body)

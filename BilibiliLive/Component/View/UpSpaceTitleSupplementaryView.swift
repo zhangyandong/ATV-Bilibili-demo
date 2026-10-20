@@ -9,7 +9,7 @@ import SnapKit
 import UIKit
 
 class UpSpaceTitleSupplementaryView: UICollectionReusableView {
-    let imageView = UIImageView()
+    let imageView = ThumbnailImageView()
     let nameLabel = UILabel()
     let despLabel = UILabel()
     let followButton = BLCustomButton()
@@ -30,6 +30,11 @@ class UpSpaceTitleSupplementaryView: UICollectionReusableView {
     @available(*, unavailable)
     required init?(coder: NSCoder) {
         fatalError()
+    }
+
+    override func prepareForReuse() {
+        super.prepareForReuse()
+        imageView.configure(url: nil, size: .zero)
     }
 
     private func setupUI() {

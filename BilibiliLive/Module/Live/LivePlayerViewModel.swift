@@ -25,10 +25,6 @@ class LivePlayerViewModel {
         roomID = room.room_id
     }
 
-    deinit {
-        danMuProvider?.stop()
-    }
-
     var onPluginReady: (([CommonPlayerPlugin]) -> Void)?
     var onError: ((String) -> Void)?
 
@@ -50,11 +46,10 @@ class LivePlayerViewModel {
                 try await refreshRoomsID()
                 try await initPlayer()
 
-                let danmu = await initDanmu()
                 let linePlugin = LineCandidatesPlugin(candidates: playInfos) { [weak self] url in
                     self?.playPlugin.play(urlString: url)
                 }
-                self.onPluginReady?(danmu + [linePlugin])
+                self.onPluginReady?([linePlugin])
 
                 if let info = await fetchDespInfo() {
                     let subtitle = "\(room.ownerName)·\(info.parent_area_name) \(info.area_name)"
@@ -112,7 +107,6 @@ class LivePlayerViewModel {
     private var playInfos = [LivePlayUrlInfo]()
     private var roomID: Int
     private let room: LiveRoom
-    private var danMuProvider: LiveDanMuProvider?
     private var retryCount = 0
 
     private func refreshRoomsID() async throws {
@@ -168,20 +162,6 @@ class LivePlayerViewModel {
         } else {
             throw LiveError.noPlaybackUrl
         }
-    }
-
-    @MainActor private func initDanmu() async -> [CommonPlayerPlugin] {
-        danMuProvider = LiveDanMuProvider(roomID: roomID, removeDup: Settings.enableDanmuRemoveDup)
-        let danmuPlugin = DanmuViewPlugin(provider: danMuProvider!)
-
-        try? await danMuProvider?.start()
-        var plugins: [CommonPlayerPlugin] = [danmuPlugin]
-        if Settings.danmuMask, Settings.vnMask {
-            let plugin = MaskViewPugin(maskView: danmuPlugin.danMuView, maskProvider: VMaskProvider())
-            plugins.append(plugin)
-        }
-
-        return plugins
     }
 }
 

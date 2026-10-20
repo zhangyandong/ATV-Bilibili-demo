@@ -216,7 +216,7 @@ extension WebRequest {
                     completion(query)
                 }
             case let .failure(error):
-                print("Error getting keys: \(error)")
+                Logger.warn("Error getting keys: \(error)")
                 completion(nil)
             }
         }

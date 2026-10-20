@@ -29,9 +29,11 @@ final class VideoPlayerDiscoveryInfoViewController: UIViewController {
     }
 
     var onSelect: ((PlayInfo) -> Void)?
+    var onAppear: (() -> Void)?
 
     private let emptyText: String
     private var entries = [Entry]()
+    private var emptyMessage: String?
 
     private lazy var collectionView: UICollectionView = {
         let layout = UICollectionViewCompositionalLayout { _, _ in
@@ -103,14 +105,21 @@ final class VideoPlayerDiscoveryInfoViewController: UIViewController {
         updateEmptyState()
     }
 
-    func update(entries: [Entry]) {
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        onAppear?()
+    }
+
+    func update(entries: [Entry], emptyMessage: String? = nil) {
         self.entries = entries
+        self.emptyMessage = emptyMessage
         guard isViewLoaded else { return }
         collectionView.reloadData()
         updateEmptyState()
     }
 
     private func updateEmptyState() {
+        emptyLabel.text = emptyMessage ?? emptyText
         let isEmpty = entries.isEmpty
         emptyLabel.isHidden = !isEmpty
         collectionView.isHidden = isEmpty
